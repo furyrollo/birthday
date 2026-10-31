@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <!-- PRIVACY: keep this page out of search engines -->
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#1a0f1f">
+  <title>The Birthday Feast 🎃</title>
+
+  <!-- Google Fonts: Cinzel (headings) + IM Fell English (letter) + Crimson Pro (body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=IM+Fell+English:ital@0;1&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎃</text></svg>">
+</head>
+<body>
+
+  <!-- ===== Ambient background layers (decorative) ===== -->
+  <canvas id="particle-canvas" aria-hidden="true"></canvas>
+  <div class="floating-candles" aria-hidden="true">
+    <span class="candle" style="--x:8%;  --d:0s;">🕯️</span>
+    <span class="candle" style="--x:22%; --d:1.6s;">🕯️</span>
+    <span class="candle" style="--x:46%; --d:0.8s;">🕯️</span>
+    <span class="candle" style="--x:68%; --d:2.4s;">🕯️</span>
+    <span class="candle" style="--x:88%; --d:1.2s;">🕯️</span>
+  </div>
+  <div class="candle-glow" aria-hidden="true"></div>
+
+  <!-- ===== Easter eggs (fixed, tappable) ===== -->
+  <button class="egg egg-moon"    id="egg-moon"    aria-label="A mysterious moon. Tap for a secret.">🌙</button>
+  <button class="egg egg-owl"     id="egg-owl"     aria-label="A patient owl. Tap for a secret.">🦉</button>
+  <button class="egg egg-pumpkin" id="egg-pumpkin" aria-label="A friendly pumpkin. Tap for a secret.">🎃</button>
+  <button class="egg egg-cat"     id="egg-cat"     aria-label="A black cat. Tap for a secret.">🐈‍⬛</button>
+  <div class="egg-toast" id="egg-toast" role="status" aria-live="polite"></div>
+
+  <!-- ===== Ambient music toggle ===== -->
+  <button id="music-toggle" class="music-toggle" aria-pressed="false" aria-label="Toggle ambient music">🔇</button>
+  <!--
+    AUDIO SWAP: replace the src below with any royalty-free loop (e.g. "ambient.mp3"
+    placed next to index.html). It only plays after the user taps the toggle.
+  -->
+  <audio id="ambient-audio" loop preload="none" src="ambient.mp3"></audio>
+
+  <!-- ============================================================
+       STOP 0 — COUNTDOWN GATE
+       Bypass for testing: add ?preview=1 to the URL
+  ============================================================ -->
+  <section id="gate" class="stop gate">
+    <div class="gate-inner">
+      <div class="gate-moon" aria-hidden="true">🌕</div>
+      <h1 class="gate-title">The feast begins in&hellip;</h1>
+      <div class="countdown" id="countdown" role="timer" aria-live="polite">
+        <div class="count-unit"><span id="cd-days">--</span><small>days</small></div>
+        <div class="count-unit"><span id="cd-hours">--</span><small>hours</small></div>
+        <div class="count-unit"><span id="cd-mins">--</span><small>minutes</small></div>
+        <div class="count-unit"><span id="cd-secs">--</span><small>seconds</small></div>
+      </div>
+      <p class="gate-hint">Return at the witching hour, when October turns&hellip; 🦇</p>
+    </div>
+  </section>
+
+  <!-- ===== Main journey (hidden until gate opens) ===== -->
+  <main id="journey" class="journey" hidden>
+
+    <!-- ========================================================
+         STOP 1 — THE DOOR (sealed scroll)
+    ========================================================= -->
+    <section id="stop-door" class="stop" data-stop="0">
+      <div class="stop-inner center">
+        <p class="eyebrow">An owl has arrived for you</p>
+        <div class="scroll-wrap">
+          <button class="scroll" id="door-scroll" aria-label="A sealed scroll. Tap to break the wax seal and unroll it.">
+            <span class="scroll-rod" aria-hidden="true"></span>
+            <span class="scroll-paper" aria-hidden="true">
+              <span class="scroll-ornament">✦ ✦ ✦</span>
+              <span class="scroll-address">
+                <em>To the coolest friend in the<br>whole wide world</em>
+              </span>
+              <span class="scroll-ornament">❦</span>
+            </span>
+            <span class="scroll-rod" aria-hidden="true"></span>
+            <span class="scroll-seal"><span>P</span></span>
+          </button>
+        </div>
+        <p class="tap-hint" id="scroll-hint">Tap the seal to unroll ✨</p>
+      </div>
+    </section>
+
+    <!-- ========================================================
+         STOP 2 — THE LETTER
+    ========================================================= -->
+    <section id="stop-letter" class="stop" data-stop="1" hidden>
+      <div class="stop-inner">
+        <article class="parchment" aria-label="Your acceptance letter">
+          <div class="parchment-crest" aria-hidden="true">🦉</div>
+          <p class="letter-school">SCHOOL OF SPOOKS, SNACKS &amp; SPELLBINDING MAKEUP</p>
+          <p class="letter-sub"><em>Headmistress: The Great Pumpkin &middot; Order of the Candy Corn, First Class</em></p>
+          <hr class="letter-rule">
+          <div id="letter-body" class="letter-body">
+            <!-- filled from CONFIG by script.js -->
+          </div>
+          <p class="letter-sign">Yours most sincerely,<br><span class="signature" id="letter-signature"></span></p>
+        </article>
+        <button class="next-btn" data-next>Continue to the Feast 🕯️</button>
+      </div>
+    </section>
+
+    <!-- ========================================================
+         STOP 3 — THE FEAST (food)
+    ========================================================= -->
+    <section id="stop-feast" class="stop" data-stop="2" hidden>
+      <div class="stop-inner">
+        <h2 class="stop-title">The Feast</h2>
+        <p class="stop-lede">The great hall is set. The candles are lit. Every dish appeared the moment you walked in. Tap a card to read the menu notes.</p>
+        <div class="table-edge" aria-hidden="true"></div>
+        <div class="food-grid" id="food-grid">
+          <!-- food cards injected from CONFIG -->
+        </div>
+        <button class="next-btn" data-next>Continue to the Hall of Fame 🏆</button>
+      </div>
+    </section>
+
+    <!-- ========================================================
+         STOP 4 — HALL OF FAME (collectible cards)
+    ========================================================= -->
+    <section id="stop-trophy" class="stop" data-stop="3" hidden>
+      <div class="stop-inner">
+        <h2 class="stop-title">The Hall of Fame</h2>
+        <p class="stop-lede">Official records of why you’re awesome, issued as limited-edition collectible cards. Tap each one to flip it and read the evidence. 🐸</p>
+        <div class="trophy-grid" id="trophy-grid">
+          <!-- collectible cards injected from CONFIG -->
+        </div>
+        <button class="next-btn" data-next>To the Midnight Balcony 🌙</button>
+      </div>
+    </section>
+
+    <!-- ========================================================
+         STOP 5 — THE MIDNIGHT BALCONY (finale)
+    ========================================================= -->
+    <section id="stop-finale" class="stop" data-stop="4" hidden>
+      <div class="stop-inner center">
+        <p class="eyebrow">You made it to the balcony. The stars are out.</p>
+        <h2 class="finale-title" id="finale-title">Happy Birthday</h2>
+        <div class="finale-candles" aria-hidden="true">🕯️ 🎂 🕯️</div>
+        <div class="finale-message parchment small" id="finale-message">
+          <!-- final message from CONFIG -->
+        </div>
+
+        <!-- Voice note: drop voice-note.mp3 next to index.html to enable -->
+        <div class="voice-note" id="voice-note" hidden>
+          <button class="big-btn" id="voice-btn">▶️ Play my voice note</button>
+          <audio id="voice-audio" preload="none" src="voice-note.mp3"></audio>
+        </div>
+
+        <button class="big-btn gold" id="confetti-btn">🎉 More confetti, please</button>
+        <p class="finale-footer">Made with a little bit of magic &middot; Oct 31</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Wand cursor sparkle layer (desktop) / tap sparkles (mobile) -->
+  <div id="sparkle-layer" aria-hidden="true"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
