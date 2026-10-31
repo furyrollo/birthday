@@ -55,7 +55,8 @@ body {
   position: fixed;
   inset: 0;
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  height: 100lvh; /* stable while mobile browser chrome expands/collapses */
   pointer-events: none;
   z-index: 1;
 }
@@ -116,11 +117,12 @@ body {
 .stop-inner.center { text-align: center; }
 
 .stop[data-visible] .stop-inner {
-  animation: stop-in .9s ease both;
+  /* Do not retain a transformed ancestor after entry: it destabilizes 3D cards. */
+  animation: stop-in .6s ease backwards;
 }
 @keyframes stop-in {
   from { opacity: 0; transform: translateY(26px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: none; }
 }
 
 .eyebrow {
@@ -151,7 +153,7 @@ body {
 
 /* ===================== Buttons ===================== */
 
-button { font-family: inherit; }
+button { font-family: inherit; touch-action: manipulation; }
 
 .next-btn, .big-btn {
   display: block;
@@ -436,20 +438,25 @@ button:focus-visible {
   transform: translateY(30px);
   transition: opacity .7s ease, transform .7s ease;
 }
-.food-card.float-in { opacity: 1; transform: translateY(0); }
+.food-card.float-in { opacity: 1; transform: none; }
 
 .food-card-inner {
   position: relative;
+  display: grid;
   width: 100%;
   min-height: 150px;
+  transform: rotateY(0deg);
   transform-style: preserve-3d;
-  transition: transform .7s cubic-bezier(.4, 0, .2, 1);
+  transition: transform .4s cubic-bezier(.4, 0, .2, 1);
 }
 .food-card.flipped .food-card-inner { transform: rotateY(180deg); }
 
 .food-face {
-  position: absolute;
-  inset: 0;
+  /* Both faces size the same grid cell, so longer notes cannot overflow. */
+  position: relative;
+  grid-area: 1 / 1;
+  min-width: 0;
+  transform: translateZ(.01px);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   border-radius: 14px;
@@ -475,7 +482,7 @@ button:focus-visible {
 }
 .food-front small { color: #b99f73; font-style: italic; }
 .food-back {
-  transform: rotateY(180deg);
+  transform: rotateY(180deg) translateZ(.01px);
   background: linear-gradient(160deg, #40264d, #2a152f);
   border: 1px solid var(--orange);
   color: var(--cream);
@@ -502,16 +509,20 @@ button:focus-visible {
 }
 .trophy-inner {
   position: relative;
+  display: grid;
   width: 100%;
   min-height: 190px;
+  transform: rotateY(0deg);
   transform-style: preserve-3d;
-  transition: transform .8s cubic-bezier(.4, 0, .2, 1);
+  transition: transform .45s cubic-bezier(.4, 0, .2, 1);
 }
 .trophy-card.flipped .trophy-inner { transform: rotateY(180deg); }
 
 .trophy-face {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  grid-area: 1 / 1;
+  min-width: 0;
+  transform: translateZ(.01px);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   border-radius: 16px;
@@ -523,17 +534,33 @@ button:focus-visible {
   gap: .5rem;
 }
 .trophy-front {
-  background:
-    linear-gradient(120deg, transparent 30%, rgba(255,255,255,.14) 48%, transparent 60%) no-repeat,
-    linear-gradient(160deg, #6d4e16, #4a3410 45%, #6d4e16 75%, #8a6a24);
-  background-size: 250% 100%, 100% 100%;
+  overflow: hidden;
+  background: linear-gradient(160deg, #6d4e16, #4a3410 45%, #6d4e16 75%, #8a6a24);
   border: 2px solid var(--gold);
   box-shadow: 0 8px 24px rgba(0,0,0,.5), inset 0 0 22px rgba(236,210,138,.25);
+}
+.trophy-front::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.14) 48%, transparent 60%);
   animation: foil-shimmer 4s linear infinite;
 }
 @keyframes foil-shimmer {
-  0%   { background-position: 120% 0, 0 0; }
-  100% { background-position: -130% 0, 0 0; }
+  from { transform: translateX(-150%); }
+  to   { transform: translateX(150%); }
+}
+.trophy-card:not(.is-in-viewport) .trophy-front::before,
+.trophy-card.flipped .trophy-front::before,
+.trophy-card:not(.is-in-viewport) .rarity.legendary,
+.trophy-card.flipped .rarity.legendary,
+.stop:not(.is-in-viewport) .tap-hint,
+.stop:not(.is-in-viewport) .finale-candles {
+  animation-play-state: paused;
+}
+.page-hidden *, .page-hidden *::before, .page-hidden *::after {
+  animation-play-state: paused !important;
 }
 .trophy-front .trophy-emoji { font-size: 2.6rem; filter: drop-shadow(0 0 8px rgba(236,210,138,.7)); }
 .trophy-front h3 {
@@ -559,7 +586,7 @@ button:focus-visible {
   animation: hint-pulse 1.8s ease-in-out infinite;
 }
 .trophy-back {
-  transform: rotateY(180deg);
+  transform: rotateY(180deg) translateZ(.01px);
   background: linear-gradient(165deg, #f6ecd2, #e2cf9f);
   color: var(--ink);
   font-family: var(--letterfont);
@@ -630,13 +657,6 @@ button:focus-visible {
 .egg-pumpkin { bottom: calc(.8rem + env(safe-area-inset-bottom)); left: .6rem; }
 .egg-cat     { bottom: calc(.8rem + env(safe-area-inset-bottom)); right: .6rem; }
 
-.egg.found { animation: egg-wiggle .7s ease; }
-@keyframes egg-wiggle {
-  0%, 100% { transform: rotate(0) scale(1); }
-  25% { transform: rotate(-16deg) scale(1.25); }
-  60% { transform: rotate(14deg) scale(1.2); }
-}
-
 .egg-toast {
   position: fixed;
   left: 50%;
@@ -684,6 +704,7 @@ button:focus-visible {
   pointer-events: none;
   z-index: 90;
   overflow: hidden;
+  contain: strict;
 }
 .sparkle {
   position: absolute;
@@ -720,6 +741,8 @@ button:focus-visible {
     transition-duration: .15s !important;
   }
   .candle, .gate-moon, .egg-owl, .candle-glow, .finale-candles,
-  .trophy-front, .tap-hint { animation: none !important; }
+  .trophy-front::before, .tap-hint { animation: none !important; }
+  .trophy-front::before { display: none; }
+  .food-card { transition-delay: 0s !important; }
   #particle-canvas { display: none; }
 }

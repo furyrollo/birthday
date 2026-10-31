@@ -134,6 +134,7 @@ function stops() { return $$(".stop[data-stop]"); }
 function showStop(index, scroll = true) {
   const target = stops().find(s => +s.dataset.stop === index);
   if (!target) return;
+  const firstReveal = !target.hasAttribute("data-visible");
   target.hidden = false;
   target.setAttribute("data-visible", "");
   if (scroll) {
@@ -142,7 +143,7 @@ function showStop(index, scroll = true) {
     });
   }
   if (target.id === "stop-feast") observeFoodCards();
-  if (target.id === "stop-finale") finaleEntrance();
+  if (firstReveal && target.id === "stop-finale") finaleEntrance();
 }
 
 /* Wire all "Next" buttons */
@@ -185,7 +186,8 @@ document.addEventListener("click", (e) => {
   const grid = $("#food-grid");
   CONFIG.foods.forEach((f, i) => {
     const card = el("button", "food-card");
-    card.style.transitionDelay = `${(i % 4) * 90}ms`;
+    card.style.transitionDelay = `${(i % 4) * 60}ms`;
+    card.setAttribute("aria-pressed", "false");
     card.setAttribute("aria-label", `${f.name}. Tap to read the menu note.`);
     card.innerHTML = `
       <div class="food-card-inner">
@@ -196,7 +198,9 @@ document.addEventListener("click", (e) => {
         </div>
         <div class="food-face food-back"><p>${f.desc}</p></div>
       </div>`;
-    card.addEventListener("click", () => card.classList.toggle("flipped"));
+    card.addEventListener("click", () => {
+      card.setAttribute("aria-pressed", String(card.classList.toggle("flipped")));
+    });
     grid.appendChild(card);
   });
 })();
@@ -215,7 +219,7 @@ function observeFoodCards() {
     entries.forEach(en => {
       if (en.isIntersecting) { en.target.classList.add("float-in"); io.unobserve(en.target); }
     });
-  }, { threshold: 0.15 });
+  }, { threshold: 0, rootMargin: "100px 0px" });
   cards.forEach(c => io.observe(c));
 }
 
@@ -226,6 +230,7 @@ function observeFoodCards() {
   const grid = $("#trophy-grid");
   CONFIG.reasons.forEach((r, i) => {
     const card = el("button", "trophy-card");
+    card.setAttribute("aria-pressed", "false");
     card.setAttribute("aria-label", `Collectible card: ${r.title}, ${r.rarity}. Tap to flip and read.`);
     card.innerHTML = `
       <div class="trophy-inner">
@@ -240,8 +245,11 @@ function observeFoodCards() {
         </div>
       </div>`;
     card.addEventListener("click", () => {
-      card.classList.toggle("flipped");
-      if (card.classList.contains("flipped")) burstSparkles(card.getBoundingClientRect(), 6);
+      // Read geometry before changing styles to avoid synchronous layout on a tap.
+      const rect = !reducedMotion && !card.classList.contains("flipped")
+        ? card.getBoundingClientRect() : null;
+      card.setAttribute("aria-pressed", String(card.classList.toggle("flipped")));
+      if (rect) burstSparkles(rect, 6);
     });
     grid.appendChild(card);
   });
@@ -279,7 +287,6 @@ function finaleEntrance() {
 /* Confetti of bats, pumpkins and stars */
 function launchConfetti(count = 60) {
   if (reducedMotion) count = Math.min(count, 15);
-  const layer = $("#sparkle-layer");
   const pieces = ["🦇", "🎃", "⭐", "✨", "🦇", "🌟", "🎃", "🍂"];
   for (let i = 0; i < count; i++) {
     const p = el("span", "confetti-piece", pieces[Math.floor(Math.random() * pieces.length)]);
@@ -288,8 +295,7 @@ function launchConfetti(count = 60) {
     p.style.setProperty("--dur", 3 + Math.random() * 3.5 + "s");
     p.style.setProperty("--spin", (Math.random() > .5 ? "" : "-") + (180 + Math.random() * 540) + "deg");
     p.style.animationDelay = Math.random() * 1.2 + "s";
-    layer.appendChild(p);
-    setTimeout(() => p.remove(), 8500);
+    if (!queueEffect(p)) break;
   }
 }
 
@@ -300,9 +306,17 @@ function launchConfetti(count = 60) {
   const toast = $("#egg-toast");
   let toastTimer;
   function reveal(btn, msg, fx) {
-    btn.classList.remove("found");
-    void btn.offsetWidth; // restart wiggle
-    btn.classList.add("found");
+    if (!reducedMotion) {
+      // Restart feedback without forcing a layout flush.
+      btn.getAnimations().filter(a => a.id === "egg-feedback").forEach(a => a.cancel());
+      const feedback = btn.animate([
+        { transform: "rotate(0) scale(1)" },
+        { transform: "rotate(-16deg) scale(1.25)", offset: 0.25 },
+        { transform: "rotate(14deg) scale(1.2)", offset: 0.6 },
+        { transform: "rotate(0) scale(1)" }
+      ], { duration: 700, easing: "ease" });
+      feedback.id = "egg-feedback";
+    }
     toast.textContent = msg;
     toast.classList.add("show");
     clearTimeout(toastTimer);
@@ -355,8 +369,36 @@ function launchConfetti(count = 60) {
 ============================================================ */
 const sparkleLayer = $("#sparkle-layer");
 const SPARKLE_CHARS = ["✦", "✧", "⋆", "✨"];
+const MAX_EFFECTS = 100;
+const pendingEffects = [];
+let effectFrame = 0;
+
+function queueEffect(node) {
+  // Bound both pending and live particles, even when confetti is tapped repeatedly.
+  if (document.hidden || sparkleLayer.childElementCount + pendingEffects.length >= MAX_EFFECTS) return false;
+  pendingEffects.push(node);
+  if (!effectFrame) effectFrame = requestAnimationFrame(() => {
+    effectFrame = 0;
+    const fragment = document.createDocumentFragment();
+    for (const effect of pendingEffects.splice(0)) fragment.appendChild(effect);
+    sparkleLayer.appendChild(fragment);
+  });
+  return true;
+}
+
+sparkleLayer.addEventListener("animationend", e => {
+  if (e.target.parentNode === sparkleLayer) e.target.remove();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) return;
+  cancelAnimationFrame(effectFrame);
+  effectFrame = 0;
+  pendingEffects.length = 0;
+  sparkleLayer.replaceChildren();
+});
 
 function spawnSparkle(x, y, char) {
+  if (document.hidden || sparkleLayer.childElementCount + pendingEffects.length >= MAX_EFFECTS) return;
   const s = el("span", "sparkle", char || SPARKLE_CHARS[Math.floor(Math.random() * SPARKLE_CHARS.length)]);
   s.style.left = x + "px";
   s.style.top = y + "px";
@@ -364,8 +406,7 @@ function spawnSparkle(x, y, char) {
   s.style.setProperty("--size", 10 + Math.random() * 10 + "px");
   s.style.setProperty("--dx", (Math.random() - 0.5) * 50 + "px");
   s.style.setProperty("--dy", 10 + Math.random() * 35 + "px");
-  sparkleLayer.appendChild(s);
-  setTimeout(() => s.remove(), 850);
+  queueEffect(s);
 }
 
 function burstSparkles(rect, n = 12, char) {
@@ -389,9 +430,21 @@ if (!reducedMotion) {
     spawnSparkle(e.clientX + 6, e.clientY + 6);
   }, { passive: true });
 
-  // Mobile: a little burst where she taps
-  window.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse") return;
+  // Wait for a completed tap: starting a swipe must not create DOM work.
+  let tap = null;
+  window.addEventListener("pointerdown", e => {
+    if (e.pointerType !== "mouse" && e.isPrimary) {
+      tap = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    } else tap = null;
+  }, { passive: true });
+  window.addEventListener("pointermove", e => {
+    if (tap && e.pointerId === tap.id && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 10) tap = null;
+  }, { passive: true });
+  window.addEventListener("pointercancel", () => { tap = null; }, { passive: true });
+  window.addEventListener("pointerup", e => {
+    const isTap = tap && e.pointerId === tap.id && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) <= 10;
+    tap = null;
+    if (!isTap) return;
     for (let i = 0; i < 5; i++) {
       spawnSparkle(e.clientX + (Math.random() - 0.5) * 36,
                    e.clientY + (Math.random() - 0.5) * 36);
@@ -406,18 +459,27 @@ if (!reducedMotion) {
   if (reducedMotion) return;
   const canvas = $("#particle-canvas");
   const ctx = canvas.getContext("2d");
+  if (!ctx) return;
   let W, H, dpr;
+  let sizeDirty = true;
+  const pixelRatioLimit = window.matchMedia("(pointer: coarse)").matches ? 1.5 : 2;
 
   function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    W = window.innerWidth;
-    H = window.innerHeight;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
+    sizeDirty = false;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const ratio = Math.min(window.devicePixelRatio || 1, pixelRatioLimit);
+    // Mobile browser chrome can fire resize throughout a scroll. Do not clear
+    // or reallocate an unchanged canvas (its CSS height uses the stable viewport).
+    if (width === W && height === H && ratio === dpr) return;
+    W = width;
+    H = height;
+    dpr = ratio;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
-  resize();
-  window.addEventListener("resize", resize);
+  window.addEventListener("resize", () => { sizeDirty = true; }, { passive: true });
 
   const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -472,14 +534,25 @@ if (!reducedMotion) {
     ctx.restore();
   }
 
-  let running = true;
+  let frameId = 0;
+  let lastPaint = 0;
+  let previousTime = 0;
   document.addEventListener("visibilitychange", () => {
-    running = !document.hidden;
-    if (running) requestAnimationFrame(frame);
+    cancelAnimationFrame(frameId);
+    frameId = 0;
+    previousTime = lastPaint = 0;
+    if (!document.hidden) frameId = requestAnimationFrame(frame);
   });
 
   function frame(ts) {
-    if (!running) return;
+    frameId = 0;
+    if (document.hidden) return;
+    frameId = requestAnimationFrame(frame);
+    // Ambient scenery needs only 30fps; leave frame time for scrolling and flips.
+    if (ts - lastPaint < 1000 / 30 - 1) return;
+    const step = previousTime ? Math.min(ts - previousTime, 50) / (1000 / 60) : 1;
+    previousTime = lastPaint = ts;
+    if (sizeDirty) resize();
     const t = ts / 1000;
     ctx.clearRect(0, 0, W, H);
 
@@ -495,8 +568,8 @@ if (!reducedMotion) {
     // leaves
     for (let i = 0; i < leaves.length; i++) {
       const l = leaves[i];
-      l.y += l.vy;
-      l.rot += l.rotSpd;
+      l.y += l.vy * step;
+      l.rot += l.rotSpd * step;
       if (l.y > 1.05) leaves[i] = spawnLeaf(false);
       const x = l.x * W + Math.sin(t * l.swaySpd + l.ph) * 36 * l.sway;
       ctx.save();
@@ -519,13 +592,27 @@ if (!reducedMotion) {
 
     // bats
     for (const b of bats) {
-      b.x += b.vx;
+      b.x += b.vx * step;
       if (b.x > 1.1) b.x = -0.1;
       if (b.x < -0.1) b.x = 1.1;
       drawBat(b, t);
     }
 
-    requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
+  if (!document.hidden) frameId = requestAnimationFrame(frame);
+})();
+
+// Pause repeating CSS effects outside the viewport and when the tab is hidden.
+(function initAnimationVisibility() {
+  const syncVisibility = () => document.documentElement.classList.toggle("page-hidden", document.hidden);
+  syncVisibility();
+  document.addEventListener("visibilitychange", syncVisibility);
+  if (!("IntersectionObserver" in window)) {
+    $$(".stop, .trophy-card").forEach(node => node.classList.add("is-in-viewport"));
+    return;
+  }
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => entry.target.classList.toggle("is-in-viewport", entry.isIntersecting && entry.intersectionRatio >= 0.01));
+  }, { threshold: [0, 0.01] });
+  $$(".stop, .trophy-card").forEach(node => observer.observe(node));
 })();
